@@ -496,4 +496,16 @@ TEST(Robust, ReRun){
 	test_rerun<int>(getIntVector(), 0, 11, 5, GT<int, 5>);
 }
 
+TEST(Robust, WhereAfterSelect){
+	bool hasException = false;
+	try{
+		vector<int> expected = getIntVector();
+		EnumerableFactory::From<int>(expected).Select(convert<int, float>).Where(GT<int, 5>).Count();
+	}
+	catch(select_before_where ex){
+		hasException = true;
+	}
+	EXPECT_EQ(true, hasException);
+}
+
 

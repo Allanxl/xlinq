@@ -1,12 +1,18 @@
-#ifndef SRC_TLINQ_H_
-#define SRC_TLINQ_H_
+#ifndef SRC_XLINQ_H_
+#define SRC_XLINQ_H_
 
+#include <set>
+#include <map>
+#include <deque>
 #include <vector>
 #include <list>
+#include <tr1/unordered_map>
+#include <tr1/unordered_set>
 #include <iostream>
 #include <string>
 #include <stdexcept>
 using namespace std;
+using namespace std::tr1;
 
 namespace xlinq
 {
@@ -16,23 +22,32 @@ namespace xlinq
 	  }
 	};
 
+	class select_before_where : public logic_error  {
+	public:
+	  explicit select_before_where (const string& what_arg) : logic_error (what_arg){
+	  }
+	};
+
 	class EnumerableFactory;
 
 	template<typename TContainer,  typename TRes, typename TIter = typename TContainer::iterator, typename TItem = typename TContainer::value_type >
 	class Enumerable
 	{
 	public:
+		typedef TRes (*Transform)(TItem);
+
 		Enumerable<TContainer, TRes> Where(bool filter(TItem)){
+			if(_transform != NULL){
+				throw select_before_where("Select should be placed after Where");
+			}
 			vector<bool (*)(TItem)> filters = _filters;
 			filters.push_back(filter);
-			return Enumerable(_begin, _end, filters, _transforms);
+			return Enumerable(_begin, _end, filters, _transform);
 		}
 
 		template<typename TValue>
 		Enumerable<TContainer, TValue> Select(TValue transform(TItem)){
-			vector<TValue (*)(TItem)> transforms;
-			transforms.push_back(transform);
-			return Enumerable<TContainer, TValue>(_begin, _end, _filters, transforms);
+			return Enumerable<TContainer, TValue>(_begin, _end, _filters, transform);
 		}
 
 		TRes Aggregate(TRes base, TRes aggregator(TRes, TRes)){
@@ -225,18 +240,18 @@ namespace xlinq
 
 	private:
 		Enumerable(TIter begin, TIter end): _begin(begin), _end(end), _cur(begin),
-			_filters(vector<bool (*)(TItem)>()), _transforms(vector<TRes (*)(TItem)>()){
+			_filters(vector<bool (*)(TItem)>()), _transform(NULL){
 		}
 
-		Enumerable(TIter begin, TIter end, vector<bool (*)(TItem)> filters, vector<TRes (*)(TItem)> transforms): _begin(begin), _end(end), _cur(begin),
-			_filters(filters), _transforms(transforms){
+		Enumerable(TIter begin, TIter end, vector<bool (*)(TItem)> filters, Transform transform): _begin(begin), _end(end), _cur(begin),
+			_filters(filters), _transform(transform){
 		}
 
 		TIter _begin;
 		TIter _end;
 		TIter _cur;
 		vector<bool (*)(TItem)> _filters;
-		vector<TRes (*)(TItem)>  _transforms;
+		Transform _transform;
 
 		inline void Reset(){
 			_cur = _begin;
@@ -263,11 +278,11 @@ namespace xlinq
 				return false;
 			}
 			else{
-				if(_transforms.empty()){
+				if(_transform == NULL){
 					result = *_cur;
 				}
 				else{
-					result = _transforms[0](*_cur);
+					result = (*_transform)(*_cur);
 				}
 				_cur++;
 				return true;
@@ -290,7 +305,33 @@ namespace xlinq
 		static Enumerable< list<TValue>, TValue > From(list<TValue>& l){
 			return Enumerable< list<TValue>, TValue >(l.begin(), l.end());
 		}
+
+		template<typename TValue>
+		static Enumerable< deque<TValue>, TValue > From(deque<TValue>& d){
+			return Enumerable< deque<TValue>, TValue >(d.begin(), d.end());
+		}
+
+		template<typename TValue>
+		static Enumerable< set<TValue>, TValue > From(set<TValue>& s){
+			return Enumerable< set<TValue>, TValue >(s.begin(), s.end());
+		}
+
+		template<typename TValue>
+		static Enumerable< unordered_set<TValue>, TValue > From(unordered_set<TValue>& s){
+			return Enumerable< unordered_set<TValue>, TValue >(s.begin(), s.end());
+		}
+
+		template<typename TKey, typename TValue>
+		static Enumerable< map<TKey, TValue>, pair<TKey, TValue> > From(map<TKey, TValue>& m){
+			return Enumerable< map<TKey, TValue>, pair<TKey, TValue> >(m.begin(), m.end());
+		}
+
+		template<typename TKey, typename TValue>
+		static Enumerable< unordered_map<TKey, TValue>, pair<TKey, TValue> > From(unordered_map<TKey, TValue>& m){
+			return Enumerable< unordered_map<TKey, TValue>, pair<TKey, TValue> >(m.begin(), m.end());
+		}
 	};
+
 }
 
-#endif /* SRC_TLINQ_H_ */
+#endif

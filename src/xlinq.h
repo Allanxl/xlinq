@@ -16,147 +16,144 @@ using namespace std::tr1;
 
 namespace xlinq
 {
-	class item_not_found : public logic_error  {
+	class item_not_found : public logic_error {
 	public:
-	  explicit item_not_found (const string& what_arg) : logic_error (what_arg){
-	  }
-	};
-
-	class select_before_where : public logic_error  {
-	public:
-	  explicit select_before_where (const string& what_arg) : logic_error (what_arg){
-	  }
+		explicit item_not_found(const string& what_arg) : logic_error(what_arg) {
+		}
 	};
 
 	class EnumerableFactory;
 
-	template<typename TContainer,  typename TRes, typename TIter = typename TContainer::iterator, typename TItem = typename TContainer::value_type >
-	class Enumerable
+	template<typename TItem>
+	class EnumeratorBase
 	{
 	public:
-		typedef TRes (*Transform)(TItem);
+		virtual bool GetNext(TItem& value) = 0;
+	};
 
-		Enumerable<TContainer, TRes> Where(bool filter(TItem)){
-			if(_transform != NULL){
-				throw select_before_where("Select should be placed after Where");
-			}
-			vector<bool (*)(TItem)> filters = _filters;
-			filters.push_back(filter);
-			return Enumerable(_begin, _end, filters, _transform);
+	template<typename TContainer, typename TTo, typename TFrom = typename TContainer::value_type, typename TIter = typename TContainer::iterator>
+	class Enumerable : public EnumeratorBase<TTo>
+	{
+	public:
+		typedef TTo(*Transform)(TFrom);
+
+		Enumerable<TContainer, TTo, TFrom>& Where(bool filter(TTo)) {
+			_filters.push_back(filter);
+			return *this;
 		}
 
 		template<typename TValue>
-		Enumerable<TContainer, TValue> Select(TValue transform(TItem)){
-			return Enumerable<TContainer, TValue>(_begin, _end, _filters, transform);
+		Enumerable<TContainer, TValue, TTo> Select(TValue transform(TTo)) {
+			return Enumerable<TContainer, TValue, TTo>(_begin, _end, transform, (EnumeratorBase<TTo>*)this);
 		}
 
-		TRes Aggregate(TRes base, TRes aggregator(TRes, TRes)){
-			TRes result = base;
-			TRes current_value;
-			while(GetNext(current_value)){
+		TTo Aggregate(TTo base, TTo aggregator(TTo, TTo)) {
+			TTo result = base;
+			TTo current_value;
+			while (GetNext(current_value)) {
 				result = aggregator(result, current_value);
 			};
 			return result;
 		}
 
-		TRes Aggregate(TRes aggregator(TRes, TRes)){
-			TRes current_value;
-			if(!GetNext(current_value)){
+		TTo Aggregate(TTo aggregator(TTo, TTo)) {
+			TTo current_value;
+			if (!GetNext(current_value)) {
 				Reset();
 				throw item_not_found("No item found");
 			}
 			return Aggregate(current_value, aggregator);
 		}
 
-		TRes Sum(TRes base){
-			TRes result = base;
-			TRes current_value;
-			while(GetNext(current_value)){
+		TTo Sum(TTo base) {
+			TTo result = base;
+			TTo current_value;
+			while (GetNext(current_value)) {
 				result = result + current_value;
 			};
 			return result;
 		}
 
-		TRes Sum(){
-			TRes current_value;
-			if(!GetNext(current_value)){
+		TTo Sum() {
+			TTo current_value;
+			if (!GetNext(current_value)) {
 				Reset();
 				return 0;
 			}
 			return Sum(current_value);
 		}
 
-		TRes Max(TRes base){
-			TRes result = base;
-			TRes current_value;
-			while(GetNext(current_value)){
+		TTo Max(TTo base) {
+			TTo result = base;
+			TTo current_value;
+			while (GetNext(current_value)) {
 				result = result > current_value ? result : current_value;
 			};
 			return result;
 		}
 
-		TRes Max(){
-			TRes current_value;
-			if(!GetNext(current_value)){
+		TTo Max() {
+			TTo current_value;
+			if (!GetNext(current_value)) {
 				Reset();
 				throw item_not_found("No item found");
 			}
 			return Max(current_value);
 		}
 
-		TRes Min(TRes base){
-			TRes result = base;
-			TRes current_value;
-			while(GetNext(current_value)){
+		TTo Min(TTo base) {
+			TTo result = base;
+			TTo current_value;
+			while (GetNext(current_value)) {
 				result = result < current_value ? result : current_value;
 			};
 			return result;
 		}
 
-		TRes Min(){
-			TRes current_value;
-			if(!GetNext(current_value)){
+		TTo Min() {
+			TTo current_value;
+			if (!GetNext(current_value)) {
 				Reset();
 				throw item_not_found("No item found");
 			}
 			return Min(current_value);
 		}
 
-		TRes First(){
-			TRes current_value;
-			if(!GetNext(current_value)){
+		TTo First() {
+			TTo current_value;
+			if (!GetNext(current_value)) {
 				Reset();
 				throw item_not_found("No item found");
 			}
-			else{
+			else {
 				Reset();
 				return current_value;
 			}
 		}
 
-		TRes FirstOrDefault(){
-			TRes current_value;
-			if(!GetNext(current_value)){
+		TTo FirstOrDefault() {
+			TTo current_value;
+			if (!GetNext(current_value)) {
 				Reset();
 				return 0;
 			}
-			else{
+			else {
 				Reset();
 				return current_value;
 			}
 		}
 
-		TRes ElementAt(size_t index){
+		TTo ElementAt(size_t index) {
 			size_t count = 1;
-			TRes current_value;
-			if(!GetNext(current_value)){
+			TTo current_value;
+			if (!GetNext(current_value)) {
 				Reset();
 				throw item_not_found("The expected item is found");
 			}
-			else{
+			else {
 				count++;
-				while(GetNext(current_value)){
-					if(count == index){
+				while (GetNext(current_value)) {
+					if (count == index) {
 						Reset();
 						return current_value;
 					}
@@ -166,10 +163,10 @@ namespace xlinq
 			}
 		}
 
-		bool Any(bool condition(TItem)){
-			TRes current_value;
-			while(GetNext(current_value)){
-				if(condition(current_value))
+		bool Any(bool condition(TFrom)) {
+			TTo current_value;
+			while (GetNext(current_value)) {
+				if (condition(current_value))
 				{
 					Reset();
 					return true;
@@ -178,19 +175,19 @@ namespace xlinq
 			return false;
 		}
 
-		bool Any(){
-			TRes current_value;
-			while(GetNext(current_value)){
+		bool Any() {
+			TTo current_value;
+			while (GetNext(current_value)) {
 				Reset();
 				return true;
 			};
 			return false;
 		}
 
-		bool All(bool condition(TItem)){
-			TRes current_value;
-			while(GetNext(current_value)){
-				if(!condition(current_value))
+		bool All(bool condition(TFrom)) {
+			TTo current_value;
+			while (GetNext(current_value)) {
+				if (!condition(current_value))
 				{
 					Reset();
 					return false;
@@ -199,10 +196,10 @@ namespace xlinq
 			return true;
 		}
 
-		bool Contains(TItem value){
-			TRes current_value;
-			while(GetNext(current_value)){
-				if(value == current_value)
+		bool Contains(TFrom value) {
+			TTo current_value;
+			while (GetNext(current_value)) {
+				if (value == current_value)
 				{
 					Reset();
 					return true;
@@ -211,123 +208,129 @@ namespace xlinq
 			return false;
 		}
 
-		int Count(){
+		int Count() {
 			int count = 0;
-			TRes current_value;
-			while(GetNext(current_value)){
+			TTo current_value;
+			while (GetNext(current_value)) {
 				count++;
 			};
 			return count++;
 		}
 
-		vector<TRes> ToVector(){
-			vector<TRes> v;
-			TRes current_value;
-			while(GetNext(current_value)){
+		vector<TTo> ToVector() {
+			vector<TTo> v;
+			TTo current_value;
+			while (GetNext(current_value)) {
 				v.push_back(current_value);
 			};
 			return v;
 		}
 
-		list<TRes> ToList(){
-			list<TRes> l;
-			TRes current_value;
-			while(GetNext(current_value)){
+		list<TTo> ToList() {
+			list<TTo> l;
+			TTo current_value;
+			while (GetNext(current_value)) {
 				l.push_back(current_value);
 			};
 			return l;
 		}
 
 	private:
-		Enumerable(TIter begin, TIter end): _begin(begin), _end(end), _cur(begin),
-			_filters(vector<bool (*)(TItem)>()), _transform(NULL){
+		Enumerable(TIter begin, TIter end) : _begin(begin), _end(end), _cur(begin),
+			_filters(vector<bool(*)(TTo)>()), _transform(NULL), _prevGetNext(NULL) {
 		}
 
-		Enumerable(TIter begin, TIter end, vector<bool (*)(TItem)> filters, Transform transform): _begin(begin), _end(end), _cur(begin),
-			_filters(filters), _transform(transform){
+		Enumerable(TIter begin, TIter end, Transform transform, EnumeratorBase<TFrom>* prevGetNext) : _begin(begin), _end(end), _cur(begin),
+			_filters(vector<bool(*)(TTo)>()), _transform(transform), _prevGetNext(prevGetNext) {
 		}
 
 		TIter _begin;
 		TIter _end;
 		TIter _cur;
-		vector<bool (*)(TItem)> _filters;
+		vector<bool(*)(TTo)> _filters;
 		Transform _transform;
+		EnumeratorBase<TFrom>* _prevGetNext;
 
-		inline void Reset(){
+		inline void Reset() {
 			_cur = _begin;
 		}
 
-		inline bool GetNext(TRes& result){
-			while(_cur != _end){
-				bool selected = true;
-				for(size_t i = 0; i < _filters.size(); i++){
-					if(!_filters[i](*_cur)){
-						selected = false;
-						break;
-					}
+		bool IsSelected(TTo& value) {
+			for (size_t i = 0; i < _filters.size(); i++) {
+				if (!_filters[i](value)) {
+					return false;
 				}
-
-				if(selected){
-					break;
-				}
-				_cur++;
 			}
+			return true;
+		}
 
-			if(_cur == _end){
+		bool GetNext(TTo& result) {
+			if (_prevGetNext == NULL) {
+				while (_cur != _end) {
+					result = (TTo)*_cur;
+					_cur++;
+
+					if (IsSelected(result)) {
+						
+						return true;
+					}
+				};
 				_cur = _begin;
 				return false;
 			}
-			else{
-				if(_transform == NULL){
-					result = *_cur;
-				}
-				else{
-					result = (*_transform)(*_cur);
-				}
-				_cur++;
-				return true;
+			else {
+				TFrom current;
+				while (_prevGetNext->GetNext(current)) {
+					bool selected = true;
+					result = (*_transform)(current);
+
+					if (IsSelected(result)) {
+						return true;
+					}
+				};
+				return false;
 			}
 		}
 
 		friend class EnumerableFactory;
 
-		template<typename T1,  typename T2, typename T3,  typename T4> friend class Enumerable;
+		template<typename T1, typename T2, typename T3, typename T4> friend class Enumerable;
 	};
 
-	class EnumerableFactory{
+	class EnumerableFactory {
 	public:
 		template<typename TValue>
-		static Enumerable< vector<TValue>, TValue > From(vector<TValue>& v){
+		static Enumerable< vector<TValue>, TValue > From(vector<TValue>& v) {
 			return Enumerable< vector<TValue>, TValue >(v.begin(), v.end());
 		}
 
 		template<typename TValue>
-		static Enumerable< list<TValue>, TValue > From(list<TValue>& l){
+		static Enumerable< list<TValue>, TValue > From(list<TValue>& l) {
 			return Enumerable< list<TValue>, TValue >(l.begin(), l.end());
 		}
 
 		template<typename TValue>
-		static Enumerable< deque<TValue>, TValue > From(deque<TValue>& d){
+		static Enumerable< deque<TValue>, TValue > From(deque<TValue>& d) {
 			return Enumerable< deque<TValue>, TValue >(d.begin(), d.end());
 		}
 
 		template<typename TValue>
-		static Enumerable< set<TValue>, TValue > From(set<TValue>& s){
+		static Enumerable< set<TValue>, TValue > From(set<TValue>& s) {
 			return Enumerable< set<TValue>, TValue >(s.begin(), s.end());
 		}
 
 		template<typename TValue>
-		static Enumerable< unordered_set<TValue>, TValue > From(unordered_set<TValue>& s){
+		static Enumerable< unordered_set<TValue>, TValue > From(unordered_set<TValue>& s) {
 			return Enumerable< unordered_set<TValue>, TValue >(s.begin(), s.end());
 		}
 
 		template<typename TKey, typename TValue>
-		static Enumerable< map<TKey, TValue>, pair<TKey, TValue> > From(map<TKey, TValue>& m){
+		static Enumerable< map<TKey, TValue>, pair<TKey, TValue> > From(map<TKey, TValue>& m) {
 			return Enumerable< map<TKey, TValue>, pair<TKey, TValue> >(m.begin(), m.end());
 		}
 
 		template<typename TKey, typename TValue>
-		static Enumerable< unordered_map<TKey, TValue>, pair<TKey, TValue> > From(unordered_map<TKey, TValue>& m){
+		static Enumerable< unordered_map<TKey, TValue>, pair<TKey, TValue> > From(unordered_map<TKey, TValue>& m) {
 			return Enumerable< unordered_map<TKey, TValue>, pair<TKey, TValue> >(m.begin(), m.end());
 		}
 	};

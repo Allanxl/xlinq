@@ -12,8 +12,6 @@ Supported STL Containers:
 Note: If it is compiled by C++ 11, <forward_list>, <unordered_map> and <unordered_set> can also be supported.
 
 Limitation:
-- Each query can have only one Select
-- Select should always be placed after Where
 - I am not guarantee all features work on others. For example, Sum() for unordered_set may be a problem because pair<TKey, TValue> may not define operator +().
 
 Check src/main.cpp for examples. Enjoy it!
